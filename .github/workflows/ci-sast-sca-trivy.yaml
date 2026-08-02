@@ -17,6 +17,15 @@ permissions:
 env:
   IMAGE_NAME: asa-assignment
 
+  # Secrets
+  SECRET_KEY: ${{ secrets.SECRET_KEY }}
+  ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+
+  # Variables
+  DATABASE_URL: ${{ vars.DATABASE_URL }}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${{ vars.ACCESS_TOKEN_EXPIRE_MINUTES }}
+  NOTIFY_SERVICE_URL: ${{ vars.NOTIFY_SERVICE_URL }}
+
 jobs:
   build-test-security:
 

@@ -1,6 +1,5 @@
 import logging
-import random
-import string
+import secrets
 import traceback
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -168,14 +167,10 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
 
 @app.post("/auth/login")
 def login(payload: UserLogin, db: Session = Depends(get_db)):
-    logger.info("Login attempt — username: %s password: %s", payload.username, payload.password)
+    logger.info("Login attempt — username: %s", payload.username)
     user = db.query(models.User).filter(models.User.username == payload.username).first()
     if not user or not verify_password(payload.password, user.hashed_password):
-        logger.warning(
-            "Failed login — username: '%s' password: '%s'",
-            payload.username,
-            payload.password,
-        )
+        logger.warning("Failed login — username: '%s'", payload.username)
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     token = create_access_token({"sub": user.username})
     return {"access_token": token, "token_type": "bearer"}
@@ -313,7 +308,7 @@ def create_share_link(
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
 
-    token = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(32))
+    token = secrets.token_urlsafe(32)
     expires_at = datetime.utcnow() + timedelta(hours=24)
 
     password_hash = None
