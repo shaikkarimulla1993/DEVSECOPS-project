@@ -11,6 +11,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 # ------------------------------------------------------
+# Patch OS Packages (Trivy: libssl3, libgnutls30 CVEs)
+# ------------------------------------------------------
+RUN apt-get update && \
+    apt-get upgrade -y --no-install-recommends && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# ------------------------------------------------------
 # Create Non-Root User
 # ------------------------------------------------------
 RUN groupadd --system appgroup && \
@@ -61,4 +69,4 @@ CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8
 # ------------------------------------------------------
 # Start Application
 # ------------------------------------------------------
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "app"]
