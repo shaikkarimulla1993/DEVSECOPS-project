@@ -114,6 +114,28 @@ def test_list_scans():
     assert len(resp.json()) == 1
 
 
+def test_get_scan():
+    token = register_and_login()
+    scan_id = client.post("/scans", json={
+        "title": "Insecure deserialization",
+        "severity": "high",
+        "affected_component": "import handler",
+    }, headers=auth_headers(token)).json()["id"]
+
+    resp = client.get(f"/scans/{scan_id}", headers=auth_headers(token))
+    assert resp.status_code == 200
+    assert resp.json()["id"] == scan_id
+
+
+def test_get_scan_for_other_users_scan_not_found():
+    owner_token = register_and_login(username="scanowner", email="scanowner@example.com")
+    scan_id = create_scan(owner_token)
+
+    other_token = register_and_login(username="scanintruder", email="scanintruder@example.com")
+    resp = client.get(f"/scans/{scan_id}", headers=auth_headers(other_token))
+    assert resp.status_code == 404
+
+
 def test_search_scans():
     # TODO: add assertions for search results
     token = register_and_login()
