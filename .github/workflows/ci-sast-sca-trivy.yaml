@@ -1,0 +1,148 @@
+name: DevSecOps CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: asa-assignment
+
+jobs:
+
+  build-test-security:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    #########################################################
+    # Checkout
+    #########################################################
+
+    - name: Checkout Source
+      uses: actions/checkout@v4
+
+    #########################################################
+    # Python
+    #########################################################
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: pip
+
+    #########################################################
+    # Install Dependencies
+    #########################################################
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest
+        pip install bandit
+        pip install pip-audit
+
+    #########################################################
+    # Tests
+    #########################################################
+
+    - name: Run Unit Tests
+      run: |
+        pytest -v
+
+    #########################################################
+    # Create Reports
+    #########################################################
+
+    - name: Create Reports Directory
+      run: |
+        mkdir -p reports/sast
+        mkdir -p reports/sca
+        mkdir -p reports/container
+
+    #########################################################
+    # SAST
+    #########################################################
+
+    - name: Run Bandit
+      continue-on-error: true
+      run: |
+        bandit -r . \
+        -f json \
+        -o reports/sast/bandit-report.json
+
+    #########################################################
+    # SCA
+    #########################################################
+
+    - name: Run pip-audit
+      continue-on-error: true
+      run: |
+        pip-audit \
+        --format=json \
+        --output reports/sca/pip-audit-report.json
+
+    #########################################################
+    # Docker Build
+    #########################################################
+
+    - name: Build Docker Image
+      run: |
+        docker build \
+        -t ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+        .
+
+    #########################################################
+    # Trivy Image Scan
+    #########################################################
+
+    - name: Run Trivy Scan
+      uses: aquasecurity/trivy-action@0.33.1
+      with:
+        image-ref: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        format: json
+        output: reports/container/trivy-report.json
+        severity: HIGH,CRITICAL
+        exit-code: "0"
+
+    #########################################################
+    # Docker Login
+    #########################################################
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    #########################################################
+    # Push Docker Image
+    #########################################################
+
+    - name: Push Docker Image
+      run: |
+        docker push \
+        ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+    #########################################################
+    # Upload Reports
+    #########################################################
+
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports
+        path: reports/
