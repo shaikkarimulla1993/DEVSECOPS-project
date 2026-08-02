@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -148,3 +149,125 @@ def test_delete_scan():
 
     resp = client.delete(f"/scans/{scan_id}", headers=auth_headers(token))
     assert resp.status_code == 204
+
+
+# ---------------------------------------------------------------------------
+# Shared report link
+# ---------------------------------------------------------------------------
+
+def create_scan(token, title="Shared finding", severity="high"):
+    resp = client.post("/scans", json={
+        "title": title,
+        "severity": severity,
+        "affected_component": "misc",
+    }, headers=auth_headers(token))
+    return resp.json()["id"]
+
+
+def test_create_share_link():
+    token = register_and_login()
+    scan_id = create_scan(token)
+
+    resp = client.post(f"/scans/{scan_id}/share", json={}, headers=auth_headers(token))
+    assert resp.status_code == 201
+    body = resp.json()
+    assert "token" in body
+    assert body["share_url"] == f"/share/{body['token']}"
+
+
+def test_create_share_link_requires_auth():
+    token = register_and_login()
+    scan_id = create_scan(token)
+
+    resp = client.post(f"/scans/{scan_id}/share", json={})
+    assert resp.status_code in (401, 403)
+
+
+def test_create_share_link_for_other_users_scan_not_found():
+    owner_token = register_and_login(username="owner", email="owner@example.com")
+    scan_id = create_scan(owner_token)
+
+    other_token = register_and_login(username="intruder", email="intruder@example.com")
+    resp = client.post(f"/scans/{scan_id}/share", json={}, headers=auth_headers(other_token))
+    assert resp.status_code == 404
+
+
+def test_access_shared_scan_without_password():
+    token = register_and_login()
+    scan_id = create_scan(token)
+
+    share_token = client.post(
+        f"/scans/{scan_id}/share", json={}, headers=auth_headers(token)
+    ).json()["token"]
+
+    resp = client.get(f"/share/{share_token}")
+    assert resp.status_code == 200
+    assert resp.json()["id"] == scan_id
+
+
+def test_access_shared_scan_with_password_missing():
+    token = register_and_login()
+    scan_id = create_scan(token)
+
+    share_token = client.post(
+        f"/scans/{scan_id}/share",
+        json={"password": "hunter2"},
+        headers=auth_headers(token),
+    ).json()["token"]
+
+    resp = client.get(f"/share/{share_token}")
+    assert resp.status_code == 401
+
+
+def test_access_shared_scan_with_wrong_password():
+    token = register_and_login()
+    scan_id = create_scan(token)
+
+    share_token = client.post(
+        f"/scans/{scan_id}/share",
+        json={"password": "hunter2"},
+        headers=auth_headers(token),
+    ).json()["token"]
+
+    resp = client.get(f"/share/{share_token}", params={"password": "wrong"})
+    assert resp.status_code == 403
+
+
+def test_access_shared_scan_with_correct_password():
+    token = register_and_login()
+    scan_id = create_scan(token)
+
+    share_token = client.post(
+        f"/scans/{scan_id}/share",
+        json={"password": "hunter2"},
+        headers=auth_headers(token),
+    ).json()["token"]
+
+    resp = client.get(f"/share/{share_token}", params={"password": "hunter2"})
+    assert resp.status_code == 200
+    assert resp.json()["id"] == scan_id
+
+
+def test_access_shared_scan_expired_link():
+    token = register_and_login()
+    scan_id = create_scan(token)
+
+    share_token = client.post(
+        f"/scans/{scan_id}/share", json={}, headers=auth_headers(token)
+    ).json()["token"]
+
+    db = TestingSessionLocal()
+    import models
+    link = db.query(models.SharedLink).filter(models.SharedLink.token == share_token).first()
+    link.expires_at = datetime.utcnow() - timedelta(hours=1)
+    db.add(link)
+    db.commit()
+    db.close()
+
+    resp = client.get(f"/share/{share_token}")
+    assert resp.status_code == 410
+
+
+def test_access_shared_scan_invalid_token():
+    resp = client.get("/share/does-not-exist")
+    assert resp.status_code == 404
