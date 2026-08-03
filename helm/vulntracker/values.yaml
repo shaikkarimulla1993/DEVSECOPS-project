@@ -1,0 +1,62 @@
+api:
+  image:
+    repository: arshadayubshaik/vulntracker-api
+    tag: "409316a"
+    digest: "sha256:c4c3e8840f6f620d8a1a38286f9c1b7c3f120f1f641f9dd9cd566b85181d15cf"
+    pullPolicy: Always
+  replicaCount: 2
+  port: 8000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  config:
+    databaseUrl: "sqlite:////data/vulntracker.db"
+    accessTokenExpireMinutes: "30"
+    # notify/ is deployed and operated separately (out of scope for this chart);
+    # point this at wherever that service actually runs.
+    notifyServiceUrl: "http://localhost:3001"
+
+namespace:
+  create: true
+  name: vulntracker
+
+networkPolicy:
+  enabled: true
+  # Restrict ingress to the api Service to traffic from pods carrying this label
+  # (e.g. an ingress-controller namespace/pod). Adjust to your cluster's ingress setup.
+  allowedIngressPodLabels:
+    app.kubernetes.io/name: ingress-nginx
+
+# External Secrets Operator (https://external-secrets.io) is expected to be installed
+# in the cluster. This chart never accepts secret values directly — it only declares
+# where they come from.
+externalSecret:
+  enabled: true
+  secretStoreRef:
+    name: vulntracker-secret-store
+    kind: SecretStore
+  refreshInterval: 1h
+  # Keys as they exist in the backing secrets manager (e.g. Vault, AWS Secrets Manager)
+  remoteKeys:
+    secretKey: vulntracker/secret-key
+    adminApiKey: vulntracker/admin-api-key
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+serviceAccount:
+  create: true
+  name: ""

@@ -1,0 +1,16 @@
+VulnTracker has been deployed to namespace "{{ include "vulntracker.namespace" . }}".
+
+API service: vulntracker-api.{{ include "vulntracker.namespace" . }}.svc.cluster.local:{{ .Values.api.port }}
+
+Note: notify/ is deployed/operated separately and is not part of this chart.
+
+Check rollout status:
+  kubectl -n {{ include "vulntracker.namespace" . }} rollout status deployment/vulntracker-api
+
+{{- if .Values.externalSecret.enabled }}
+
+This chart expects the External Secrets Operator to be installed in the cluster,
+and a SecretStore/ClusterSecretStore named "{{ .Values.externalSecret.secretStoreRef.name }}"
+to already exist, pointing at your secrets backend (Vault, AWS Secrets Manager, etc.).
+No application secrets are stored in this chart's values or manifests.
+{{- end }}

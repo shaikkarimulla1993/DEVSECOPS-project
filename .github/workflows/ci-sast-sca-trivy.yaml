@@ -17,11 +17,11 @@ permissions:
 env:
   IMAGE_NAME: asa-assignment
 
-  # Secrets
+  # GitHub Secrets
   SECRET_KEY: ${{ secrets.SECRET_KEY }}
   ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
 
-  # Variables
+  # GitHub Variables
   DATABASE_URL: ${{ vars.DATABASE_URL }}
   ACCESS_TOKEN_EXPIRE_MINUTES: ${{ vars.ACCESS_TOKEN_EXPIRE_MINUTES }}
   NOTIFY_SERVICE_URL: ${{ vars.NOTIFY_SERVICE_URL }}
@@ -58,10 +58,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest bandit pip-audit
+        pip install pytest bandit pip-audit checkov
 
     #########################################################
-    # Unit Tests
+    # Run Unit Tests
     #########################################################
 
     - name: Run Unit Tests
@@ -69,14 +69,15 @@ jobs:
         pytest -v
 
     #########################################################
-    # Create Reports Directory
+    # Create Report Directories
     #########################################################
 
-    - name: Create Reports Directory
+    - name: Create Report Directories
       run: |
         mkdir -p reports/sast
         mkdir -p reports/sca
         mkdir -p reports/container
+        mkdir -p reports/helm
 
     #########################################################
     # SAST - Bandit
@@ -89,13 +90,6 @@ jobs:
           -f json \
           -o reports/sast/bandit-report.json
 
-    - name: Upload Bandit Report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: bandit-report
-        path: reports/sast/bandit-report.json
-
     #########################################################
     # SCA - pip-audit
     #########################################################
@@ -106,13 +100,6 @@ jobs:
         pip-audit \
           --format=json \
           --output reports/sca/pip-audit-report.json
-
-    - name: Upload pip-audit Report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: pip-audit-report
-        path: reports/sca/pip-audit-report.json
 
     #########################################################
     # Docker Login
@@ -125,7 +112,7 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
 
     #########################################################
-    # Build Docker Image
+    # Docker Build
     #########################################################
 
     - name: Build Docker Image
@@ -158,14 +145,13 @@ jobs:
     #########################################################
 
     - name: Verify Trivy Installation
-      run: |
-        trivy --version
+      run: trivy --version
 
     #########################################################
-    # Trivy Scan
+    # Trivy Image Scan
     #########################################################
 
-    - name: Run Trivy Scan
+    - name: Run Trivy Image Scan
       run: |
         trivy image \
           --severity HIGH,CRITICAL \
@@ -175,13 +161,6 @@ jobs:
           --exit-code 0 \
           ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-    - name: Upload Trivy Report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: trivy-report
-        path: reports/container/trivy-report.json
-
     #########################################################
     # Push Docker Images
     #########################################################
@@ -190,6 +169,36 @@ jobs:
       run: |
         docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+
+    #########################################################
+    # Install Helm
+    #########################################################
+
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+
+    #########################################################
+    # Render Helm Templates
+    #########################################################
+
+    - name: Render Helm Templates
+      run: |
+        helm template vulntracker ./helm/vulntracker \
+          --set image.repository=${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }} \
+          --set image.tag=${{ github.sha }} \
+          > reports/helm/rendered.yaml
+
+    #########################################################
+    # Checkov Scan
+    #########################################################
+
+    - name: Run Checkov Scan
+      continue-on-error: true
+      run: |
+        checkov \
+          -f reports/helm/rendered.yaml \
+          -o json \
+          > reports/helm/checkov-report.json
 
     #########################################################
     # Upload All Reports

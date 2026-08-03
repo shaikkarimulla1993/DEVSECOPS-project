@@ -1,0 +1,6 @@
+apiVersion: v2
+name: vulntracker
+description: Helm chart for VulnTracker — a FastAPI vulnerability scan tracking API with a Node.js notification sidecar service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
