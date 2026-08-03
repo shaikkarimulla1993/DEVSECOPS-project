@@ -153,6 +153,64 @@ Write a production-grade `Dockerfile` for the **Python FastAPI service** (`app/`
 
 The container image must build successfully and the app must be reachable via `docker run`. Include build and run instructions in your README.
 
+
+## Run the Docker Container (Production Style)
+
+The application is configured using environment variables. The following example demonstrates a production-style deployment where sensitive configuration is supplied at runtime rather than embedded in the container image.
+
+```bash
+docker run -d \
+  --name vulntracker \
+  -p 8000:8000 \
+  -e SECRET_KEY="$(openssl rand -hex 32)" \
+  -e ADMIN_API_KEY="$(openssl rand -hex 32)" \
+  -e DATABASE_URL="sqlite:///./vulntracker.db" \
+  -e ACCESS_TOKEN_EXPIRE_MINUTES=30 \
+  -e NOTIFY_SERVICE_URL="http://localhost:3001" \
+  karimulla1993/asa-assignment:latest
+```
+
+> **Note:** For demonstration purposes, random secrets are generated using `openssl`. In a production environment, secrets should be supplied by a secure secrets management solution (for example, GitHub Secrets, Kubernetes Secrets, HashiCorp Vault, or AWS Secrets Manager).
+
+---
+
+## Verify the Application Health
+
+Once the container is running, verify the health endpoint.
+
+### Local Verification
+
+```bash
+curl http://localhost:8000/health
+```
+
+Expected response:
+
+```json
+{
+  "status": "healthy"
+}
+```
+
+---
+
+### Public Endpoint Verification
+
+If the container is deployed on a server with port **8000** exposed:
+
+```bash
+curl http://3.111.58.144:8000/health
+```
+
+Or open the following URL in your browser:
+
+```
+http://3.111.58.144:8000/health
+```
+
+---
+
+
 #### Infrastructure
 
 Add either a `terraform/` or `helm/` directory (your choice) that could deploy this service to a Kubernetes cluster or cloud environment. Your deployment must:
