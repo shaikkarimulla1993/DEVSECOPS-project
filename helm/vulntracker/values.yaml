@@ -1,8 +1,8 @@
 api:
   image:
-    repository: arshadayubshaik/vulntracker-api
-    tag: "409316a"
-    digest: "sha256:c4c3e8840f6f620d8a1a38286f9c1b7c3f120f1f641f9dd9cd566b85181d15cf"
+    repository: karimulla1993/asa-assignment
+    tag: "0608c4160c34bc318498c9a4eca690aa1e6e9235"
+    digest: "sha256:ba4fdee6a01c427703d16ab53ff3c4913f8201783b5b979b9b78434353f98e78"
     pullPolicy: Always
   replicaCount: 2
   port: 8000
